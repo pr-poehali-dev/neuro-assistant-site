@@ -8,6 +8,9 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 import Icon from '@/components/ui/icon';
 
 interface Task {
@@ -28,6 +31,7 @@ interface Reminder {
 }
 
 const Index = () => {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('home');
   const [tasks, setTasks] = useState<Task[]>([
     { id: 1, title: 'Утренняя медитация', time: '08:00', duration: 15, completed: true, category: 'wellness' },
@@ -42,10 +46,125 @@ const Index = () => {
     { id: 3, text: 'Время для дыхательных упражнений', time: '16:00', sound: 'calm', vibration: true },
   ]);
 
+  const [showTaskDialog, setShowTaskDialog] = useState(false);
+  const [showReminderDialog, setShowReminderDialog] = useState(false);
+  const [showAdviceDialog, setShowAdviceDialog] = useState(false);
+  const [aiAdviceText, setAiAdviceText] = useState('');
+  const [isLoadingAdvice, setIsLoadingAdvice] = useState(false);
+  const [generatedAdvice, setGeneratedAdvice] = useState('');
+
+  const [newTask, setNewTask] = useState({ title: '', time: '', duration: 30, category: 'work' });
+  const [newReminder, setNewReminder] = useState({ text: '', time: '', sound: 'gentle', vibration: true });
+
   const toggleTask = (id: number) => {
     setTasks(tasks.map(task => 
       task.id === id ? { ...task, completed: !task.completed } : task
     ));
+  };
+
+  const addTask = () => {
+    if (!newTask.title || !newTask.time) {
+      toast({
+        title: "Заполни все поля",
+        description: "Название и время обязательны",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const task: Task = {
+      id: Date.now(),
+      title: newTask.title,
+      time: newTask.time,
+      duration: newTask.duration,
+      completed: false,
+      category: newTask.category
+    };
+    
+    setTasks([...tasks, task]);
+    setNewTask({ title: '', time: '', duration: 30, category: 'work' });
+    setShowTaskDialog(false);
+    
+    toast({
+      title: "Задача добавлена! 🎉",
+      description: `${task.title} в ${task.time}`
+    });
+  };
+
+  const addReminder = () => {
+    if (!newReminder.text || !newReminder.time) {
+      toast({
+        title: "Заполни все поля",
+        description: "Текст и время обязательны",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const reminder: Reminder = {
+      id: Date.now(),
+      text: newReminder.text,
+      time: newReminder.time,
+      sound: newReminder.sound,
+      vibration: newReminder.vibration
+    };
+    
+    setReminders([...reminders, reminder]);
+    setNewReminder({ text: '', time: '', sound: 'gentle', vibration: true });
+    setShowReminderDialog(false);
+    
+    toast({
+      title: "Напоминание создано! ⏰",
+      description: `${reminder.text} в ${reminder.time}`
+    });
+  };
+
+  const getAIAdvice = async () => {
+    if (!aiAdviceText.trim()) {
+      toast({
+        title: "Опиши свою ситуацию",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoadingAdvice(true);
+    
+    try {
+      const response = await fetch('https://functions.poehali.dev/9c01446e-5dd4-4c20-b884-40cbef9e72de', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          situation: aiAdviceText
+        })
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.advice) {
+        setGeneratedAdvice(data.advice);
+        toast({
+          title: "Совет получен! ✨",
+          description: "Надеюсь, это поможет!"
+        });
+      } else {
+        toast({
+          title: "Не удалось получить совет",
+          description: data.error || "Попробуй еще раз",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Ошибка соединения",
+        description: "Проверь интернет-соединение",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingAdvice(false);
+    }
   };
 
   const completedTasks = tasks.filter(t => t.completed).length;
@@ -69,12 +188,27 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-accent/10">
-      <div className="max-w-6xl mx-auto p-4 md:p-8 pb-24">
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-accent/10 relative overflow-hidden">
+      <div 
+        className="fixed bottom-10 right-10 w-48 h-48 opacity-30 pointer-events-none animate-bounce"
+        style={{
+          backgroundImage: 'url(https://cdn.poehali.dev/projects/2b652a72-4d75-43ef-b95d-826f998b10ef/files/9f65908a-d8d9-4e01-8e3c-d03c52bfe697.jpg)',
+          backgroundSize: 'contain',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'center',
+          animationDuration: '3s'
+        }}
+      />
+      
+      <div className="max-w-6xl mx-auto p-4 md:p-8 pb-24 relative z-10">
         <header className="mb-8 text-center animate-fade-in">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-3">
-            FocusFlow
-          </h1>
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <span className="text-4xl animate-bounce" style={{ animationDuration: '2s' }}>💜</span>
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground">
+              FocusFlow
+            </h1>
+            <span className="text-4xl animate-bounce" style={{ animationDuration: '2s', animationDelay: '0.3s' }}>✨</span>
+          </div>
           <p className="text-muted-foreground text-lg">
             Твой персональный помощник с СДВГ
           </p>
@@ -109,7 +243,7 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="home" className="space-y-6 animate-fade-in">
-            <Card className="border-2 shadow-lg">
+            <Card className="border-2 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Icon name="Target" size={24} className="text-primary" />
@@ -146,7 +280,7 @@ const Index = () => {
               </CardContent>
             </Card>
 
-            <Card className="border-2 shadow-lg">
+            <Card className="border-2 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Icon name="Sparkles" size={24} className="text-primary" />
@@ -171,7 +305,7 @@ const Index = () => {
               </CardContent>
             </Card>
 
-            <Card className="border-2 shadow-lg">
+            <Card className="border-2 shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Icon name="Bell" size={24} className="text-primary" />
@@ -237,7 +371,11 @@ const Index = () => {
                     </Badge>
                   </div>
                 ))}
-                <Button className="w-full mt-4 h-12 text-base" size="lg">
+                <Button 
+                  className="w-full mt-4 h-12 text-base" 
+                  size="lg"
+                  onClick={() => setShowTaskDialog(true)}
+                >
                   <Icon name="Plus" size={20} className="mr-2" />
                   Добавить задачу
                 </Button>
@@ -278,7 +416,11 @@ const Index = () => {
                     </div>
                   </div>
                 ))}
-                <Button className="w-full mt-4 h-12 text-base" size="lg">
+                <Button 
+                  className="w-full mt-4 h-12 text-base" 
+                  size="lg"
+                  onClick={() => setShowReminderDialog(true)}
+                >
                   <Icon name="Plus" size={20} className="mr-2" />
                   Создать напоминание
                 </Button>
@@ -333,11 +475,29 @@ const Index = () => {
                   <Textarea 
                     placeholder="Например: Я не могу сосредоточиться на работе уже 2 часа..." 
                     className="min-h-24 resize-none"
+                    value={aiAdviceText}
+                    onChange={(e) => setAiAdviceText(e.target.value)}
                   />
-                  <Button className="w-full h-12 text-base">
+                  <Button 
+                    className="w-full h-12 text-base"
+                    onClick={() => setShowAdviceDialog(true)}
+                    disabled={!aiAdviceText.trim()}
+                  >
                     <Icon name="Send" size={18} className="mr-2" />
                     Получить совет
                   </Button>
+                  
+                  {generatedAdvice && (
+                    <div className="mt-4 p-4 rounded-xl bg-primary/10 border-2 border-primary/20 animate-fade-in">
+                      <div className="flex items-start gap-3">
+                        <Icon name="Sparkles" size={20} className="text-primary mt-1" />
+                        <div>
+                          <h4 className="font-semibold mb-2">Совет от ИИ:</h4>
+                          <p className="text-sm leading-relaxed">{generatedAdvice}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -363,19 +523,19 @@ const Index = () => {
                   </div>
 
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="p-4 rounded-xl bg-muted/50 text-center">
+                    <div className="p-4 rounded-xl bg-muted/50 text-center hover:scale-105 transition-transform">
                       <div className="text-3xl font-bold text-primary mb-1">7</div>
                       <div className="text-sm text-muted-foreground">Дней подряд</div>
                     </div>
-                    <div className="p-4 rounded-xl bg-muted/50 text-center">
+                    <div className="p-4 rounded-xl bg-muted/50 text-center hover:scale-105 transition-transform">
                       <div className="text-3xl font-bold text-primary mb-1">42</div>
                       <div className="text-sm text-muted-foreground">Задач за неделю</div>
                     </div>
-                    <div className="p-4 rounded-xl bg-muted/50 text-center">
+                    <div className="p-4 rounded-xl bg-muted/50 text-center hover:scale-105 transition-transform">
                       <div className="text-3xl font-bold text-primary mb-1">5.2</div>
                       <div className="text-sm text-muted-foreground">Часов фокуса</div>
                     </div>
-                    <div className="p-4 rounded-xl bg-muted/50 text-center">
+                    <div className="p-4 rounded-xl bg-muted/50 text-center hover:scale-105 transition-transform">
                       <div className="text-3xl font-bold text-primary mb-1">12</div>
                       <div className="text-sm text-muted-foreground">Советов применено</div>
                     </div>
@@ -402,7 +562,7 @@ const Index = () => {
                 ].map((badge, index) => (
                   <div
                     key={index}
-                    className={`p-6 rounded-xl text-center transition-all ${
+                    className={`p-6 rounded-xl text-center transition-all hover:scale-105 ${
                       badge.unlocked 
                         ? 'bg-primary/20 border-2 border-primary/30' 
                         : 'bg-muted/30 opacity-50 grayscale'
@@ -479,6 +639,178 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={showTaskDialog} onOpenChange={setShowTaskDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="Plus" size={20} />
+              Добавить задачу
+            </DialogTitle>
+            <DialogDescription>
+              Создай новую задачу для своего расписания
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="task-title">Название задачи</Label>
+              <Input
+                id="task-title"
+                placeholder="Например: Прогулка в парке"
+                value={newTask.title}
+                onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="task-time">Время</Label>
+                <Input
+                  id="task-time"
+                  type="time"
+                  value={newTask.time}
+                  onChange={(e) => setNewTask({...newTask, time: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="task-duration">Длительность (мин)</Label>
+                <Input
+                  id="task-duration"
+                  type="number"
+                  value={newTask.duration}
+                  onChange={(e) => setNewTask({...newTask, duration: parseInt(e.target.value) || 30})}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="task-category">Категория</Label>
+              <Select value={newTask.category} onValueChange={(value) => setNewTask({...newTask, category: value})}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="work">Работа</SelectItem>
+                  <SelectItem value="wellness">Здоровье</SelectItem>
+                  <SelectItem value="learning">Обучение</SelectItem>
+                  <SelectItem value="break">Отдых</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTaskDialog(false)}>
+              Отмена
+            </Button>
+            <Button onClick={addTask}>
+              <Icon name="Check" size={16} className="mr-2" />
+              Создать
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showReminderDialog} onOpenChange={setShowReminderDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="Bell" size={20} />
+              Создать напоминание
+            </DialogTitle>
+            <DialogDescription>
+              Настрой напоминание с выбором звука и вибрации
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reminder-text">Текст напоминания</Label>
+              <Input
+                id="reminder-text"
+                placeholder="Например: Сделать перерыв"
+                value={newReminder.text}
+                onChange={(e) => setNewReminder({...newReminder, text: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reminder-time">Время</Label>
+              <Input
+                id="reminder-time"
+                type="time"
+                value={newReminder.time}
+                onChange={(e) => setNewReminder({...newReminder, time: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reminder-sound">Звук</Label>
+              <Select value={newReminder.sound} onValueChange={(value) => setNewReminder({...newReminder, sound: value})}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gentle">Gentle</SelectItem>
+                  <SelectItem value="water">Water</SelectItem>
+                  <SelectItem value="calm">Calm</SelectItem>
+                  <SelectItem value="bird">Bird</SelectItem>
+                  <SelectItem value="wind">Wind</SelectItem>
+                  <SelectItem value="chime">Chime</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
+              <Label htmlFor="reminder-vibration" className="cursor-pointer">
+                Вибрация
+              </Label>
+              <Switch 
+                id="reminder-vibration" 
+                checked={newReminder.vibration}
+                onCheckedChange={(checked) => setNewReminder({...newReminder, vibration: checked})}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReminderDialog(false)}>
+              Отмена
+            </Button>
+            <Button onClick={addReminder}>
+              <Icon name="Check" size={16} className="mr-2" />
+              Создать
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAdviceDialog} onOpenChange={setShowAdviceDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="Sparkles" size={20} />
+              Получить совет от ИИ
+            </DialogTitle>
+            <DialogDescription>
+              Нейросеть проанализирует твою ситуацию и даст персональный совет
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-3">Твоя ситуация:</p>
+            <div className="p-4 rounded-lg bg-muted/50 mb-4">
+              <p className="text-sm">{aiAdviceText}</p>
+            </div>
+            {isLoadingAdvice && (
+              <div className="text-center py-8">
+                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-3"></div>
+                <p className="text-sm text-muted-foreground">Думаю над советом...</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAdviceDialog(false)}>
+              Отмена
+            </Button>
+            <Button onClick={getAIAdvice} disabled={isLoadingAdvice}>
+              <Icon name="Sparkles" size={16} className="mr-2" />
+              {isLoadingAdvice ? 'Думаю...' : 'Получить совет'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
